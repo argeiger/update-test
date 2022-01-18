@@ -1,0 +1,93 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: pre-reqs-task
+spec:
+  params:
+    - name: git-access-token
+      description: |
+        (optional) token to access the git repository. If this token is provided, there will not be an attempt
+        to use the git token obtained from the authorization flow when adding the git integration in the toolchain
+      default: ""
+    - name: repository
+      description: the git repo url
+    - name: branch
+      description: the git branch
+      default: master
+    - name: pipeline-debug
+      description: toggles debug mode for the pipeline
+      default: "false"
+    - name: continuous-delivery-context-secret
+      description: Reference name for the secret resource
+      default: "secure-properties"
+  stepTemplate:
+    env:
+      - name: PIPELINE_DEBUG
+        value: $(params.pipeline-debug)
+  steps:
+    - name: code-update-check
+      image: icr.io/continuous-delivery/pipeline/pipeline-base-ubi:3.3
+      workingDir: "/artifacts"
+      imagePullPolicy: Always
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          #!/bin/bash -e
+
+          if [[ "${PIPELINE_DEBUG}" == "true" ]]; then
+            pwd
+            env
+            trap env EXIT
+            set -x
+          fi
+
+          echo "To be implemented";
+
+    - name: terraform-check
+      image: icr.io/continuous-delivery/pipeline/pipeline-base-ubi:3.3
+      workingDir: "/artifacts"
+      imagePullPolicy: Always
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          #!/bin/bash -e
+
+          if [[ "${PIPELINE_DEBUG}" == "true" ]]; then
+            pwd
+            env
+            trap env EXIT
+            set -x
+          fi
+
+          echo "Verify that all inputs that need to be user defined are set"
+          grep -w "<USER DEFINED INPUT>" ./terraform/terraform.tfvars
+          if [[ $? -eq 0 ]]; then
+            echo "terraform.tfvars file contain variables that need user input.  Please change the variables that are set to <USER DEFINED INPUT> to an appropriate value"
+            exit 1;
+          fi
+
+          echo "Issuing terraform validation"
+          TF_DIR="/tmp"
+          TF_CMD="${TF_DIR}/terraform"
+          wget -q https://releases.hashicorp.com/terraform/1.0.10/terraform_1.0.10_linux_amd64.zip -O "${TF_CMD}.zip"
+          unzip -d "${TF_DIR}" -u "${TF_CMD}.zip"
+
+          cd /artifacts/terraform
+
+          echo "Issuing terraform init";
+          "${TF_CMD}" init;
+          "${TF_CMD}" validate
+
+          echo "CONTENTS ====>"
+          ls -altr
+  workspaces:
+    - name: artifacts
+      mountPath: /artifacts
+    - name: secrets
+      mountPath: /secrets
+  volumes:
+    - name: secrets
+      secret:
+        secretName: $(params.continuous-delivery-context-secret)
+
