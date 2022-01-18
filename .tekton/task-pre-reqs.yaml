@@ -42,7 +42,29 @@ spec:
             set -x
           fi
 
-          echo "To be implemented";
+          REMOTE_REPO=$(cat manifest.json | jq -r .repository)
+          VERSION=$(cat manifest.json | jq -r .version)
+
+          TMP_DIR=/tmp/pattern
+          mkdir $TMP_DIR
+          git clone "${REMOTE_REPO}" "${TMP_DIR}"
+
+          REMOTE_VERSION=$(cat "${TMP_DIR}/manifest.json" | jq -r .repository)
+
+          #Need to upgrade
+          if [[ "${VERSION}" != "${REMOTE_VERSION}" ]]; then
+             rc=$(git ls-remote --exit-code --heads origin "updates-v${REMOTE_VERSION}")
+             if [[ $rc -eq 0 ]]; then
+               echo "Remote branch already exists, no creating another branch"
+               exit 0;
+             fi 
+
+             git remote add slz-upstream "v${REMOTE_REPO}"
+             git fetch upstream slz-upstream
+             git checkout -b "updates-v${REMOTE_VERSION}"
+             git merge remotes/slz-upstream/master
+          fi
+
 
     - name: terraform-check
       image: icr.io/continuous-delivery/pipeline/pipeline-base-ubi:3.3
